@@ -4,7 +4,13 @@ import type { Swimlane, InsertSwimlane, Project, InsertProject, Task, InsertTask
 
 // Swimlane operations
 export async function getAllSwimlanes(): Promise<Swimlane[]> {
-  return await db.select().from(swimlanes).orderBy(asc(swimlanes.createdAt));
+  try {
+    return await db.select().from(swimlanes).orderBy(asc(swimlanes.createdAt));
+  } catch (error) {
+    console.error('Error getting swimlanes:', error);
+    // Return empty array if database is not available (build time)
+    return [];
+  }
 }
 
 export async function createSwimlane(data: InsertSwimlane): Promise<Swimlane> {
@@ -21,9 +27,14 @@ export async function deleteSwimlane(id: string): Promise<void> {
 
 // Project operations
 export async function getProjectsBySwimlaneId(swimlaneId: string): Promise<Project[]> {
-  return await db.select().from(projects)
-    .where(eq(projects.swimlaneId, swimlaneId))
-    .orderBy(asc(projects.createdAt));
+  try {
+    return await db.select().from(projects)
+      .where(eq(projects.swimlaneId, swimlaneId))
+      .orderBy(asc(projects.createdAt));
+  } catch (error) {
+    console.error('Error getting projects by swimlane:', error);
+    return [];
+  }
 }
 
 export async function createProject(data: InsertProject): Promise<Project> {
