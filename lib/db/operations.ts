@@ -4,6 +4,12 @@ import type { Swimlane, InsertSwimlane, Project, InsertProject, Task, InsertTask
 
 // Swimlane operations
 export async function getAllSwimlanes(): Promise<Swimlane[]> {
+  // Skip database operations during Vercel build
+  if (process.env.SKIP_DATABASE_OPERATIONS === 'true') {
+    console.log('Skipping database operations during build');
+    return [];
+  }
+  
   try {
     return await db.select().from(swimlanes).orderBy(asc(swimlanes.createdAt));
   } catch (error) {
