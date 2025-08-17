@@ -129,141 +129,181 @@ export interface SwimlaneWithProjects extends Swimlane {
 }
 
 export async function buildTaskHierarchy(projectId: string): Promise<TaskWithSubtasks[]> {
-  // Get all tasks for the project
-  const allTasks = await db.select().from(tasks)
-    .where(eq(tasks.projectId, projectId))
-    .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
+  try {
+    // Get all tasks for the project
+    const allTasks = await db.select().from(tasks)
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.createdAt));
 
-  // Create a map for quick lookup
-  const taskMap = new Map<string, TaskWithSubtasks>();
-  const rootTasks: TaskWithSubtasks[] = [];
+    // Create a map for quick lookup
+    const taskMap = new Map<string, TaskWithSubtasks>();
+    const rootTasks: TaskWithSubtasks[] = [];
 
-  // Initialize all tasks with empty subtasks array
-  allTasks.forEach(task => {
-    taskMap.set(task.id, { ...task, subtasks: [] });
-  });
+    // Initialize all tasks with empty subtasks array
+    allTasks.forEach(task => {
+      taskMap.set(task.id, { ...task, subtasks: [] });
+    });
 
-  // Build the hierarchy
-  allTasks.forEach(task => {
-    const taskWithSubtasks = taskMap.get(task.id)!;
-    
-    if (task.parentTaskId && taskMap.has(task.parentTaskId)) {
-      // This is a subtask
-      const parent = taskMap.get(task.parentTaskId)!;
-      parent.subtasks.push(taskWithSubtasks);
-    } else {
-      // This is a root task
-      rootTasks.push(taskWithSubtasks);
-    }
-  });
+    // Build the hierarchy
+    allTasks.forEach(task => {
+      const taskWithSubtasks = taskMap.get(task.id)!;
+      
+      if (task.parentTaskId && taskMap.has(task.parentTaskId)) {
+        // This is a subtask
+        const parent = taskMap.get(task.parentTaskId)!;
+        parent.subtasks.push(taskWithSubtasks);
+      } else {
+        // This is a root task
+        rootTasks.push(taskWithSubtasks);
+      }
+    });
 
-  return rootTasks;
+    return rootTasks;
+  } catch (error) {
+    console.error('Error building task hierarchy:', error);
+    // Return empty array if task loading fails (build time)
+    return [];
+  }
 }
 
 export async function getFullSwimlaneData(): Promise<SwimlaneWithProjects[]> {
-  const allSwimlanes = await getAllSwimlanes();
-  
-  const swimlanesWithData: SwimlaneWithProjects[] = [];
-  
-  for (const swimlane of allSwimlanes) {
-    const swimlaneProjects = await getProjectsBySwimlaneId(swimlane.id);
+  try {
+    const allSwimlanes = await getAllSwimlanes();
     
-    const projectsWithTasks: ProjectWithTasks[] = [];
+    const swimlanesWithData: SwimlaneWithProjects[] = [];
     
-    for (const project of swimlaneProjects) {
-      const tasks = await buildTaskHierarchy(project.id);
-      projectsWithTasks.push({
-        ...project,
-        tasks,
-      });
+    for (const swimlane of allSwimlanes) {
+      try {
+        const swimlaneProjects = await getProjectsBySwimlaneId(swimlane.id);
+        
+        const projectsWithTasks: ProjectWithTasks[] = [];
+        
+        for (const project of swimlaneProjects) {
+          try {
+            const tasks = await buildTaskHierarchy(project.id);
+            projectsWithTasks.push({
+              ...project,
+              tasks,
+            });
+          } catch (error) {
+            console.error(`Error building task hierarchy for project ${project.id}:`, error);
+            // Include project with empty tasks if task loading fails
+            projectsWithTasks.push({
+              ...project,
+              tasks: [],
+            });
+          }
+        }
+        
+        swimlanesWithData.push({
+          ...swimlane,
+          projects: projectsWithTasks,
+        });
+      } catch (error) {
+        console.error(`Error loading projects for swimlane ${swimlane.id}:`, error);
+        // Include swimlane with empty projects if project loading fails
+        swimlanesWithData.push({
+          ...swimlane,
+          projects: [],
+        });
+      }
     }
     
-    swimlanesWithData.push({
-      ...swimlane,
-      projects: projectsWithTasks,
-    });
+    return swimlanesWithData;
+  } catch (error) {
+    console.error('Error in getFullSwimlaneData:', error);
+    // Return empty array if everything fails (build time)
+    return [];
   }
-  
-  return swimlanesWithData;
 }
 
 // Utility function to initialize with sample data
 export async function initializeSampleData(): Promise<void> {
-  const existingSwimlanes = await getAllSwimlanes();
-  if (existingSwimlanes.length > 0) {
-    return; // Already has data
+  try {
+    const existingSwimlanes = await getAllSwimlanes();
+    if (existingSwimlanes.length > 0) {
+      return; // Already has data
+    }
+  } catch (error) {
+    console.error('Error checking existing swimlanes:', error);
+    // If we can't check, assume we need to initialize
   }
 
-  // Create default swimlanes
-  const personalSwimlane = await createSwimlane({
-    id: "1",
-    title: "Personal",
-    color: "bg-blue-500",
-  });
+  try {
+    // Create default swimlanes
+    const personalSwimlane = await createSwimlane({
+      id: "1",
+      title: "Personal",
+      color: "bg-blue-500",
+    });
 
-  const workSwimlane = await createSwimlane({
-    id: "2",
-    title: "Work",
-    color: "bg-green-500",
-  });
+    const workSwimlane = await createSwimlane({
+      id: "2",
+      title: "Work",
+      color: "bg-green-500",
+    });
 
-  const investingSwimlane = await createSwimlane({
-    id: "3",
-    title: "Investing",
-    color: "bg-purple-500",
-  });
+    const investingSwimlane = await createSwimlane({
+      id: "3",
+      title: "Investing",
+      color: "bg-purple-500",
+    });
 
-  // Create default projects
-  const healthProject = await createProject({
-    id: "1",
-    title: "Health & Fitness",
-    description: "Personal wellness goals and activities",
-    swimlaneId: personalSwimlane.id,
-  });
+    // Create default projects
+    const healthProject = await createProject({
+      id: "1",
+      title: "Health & Fitness",
+      description: "Personal wellness goals and activities",
+      swimlaneId: personalSwimlane.id,
+    });
 
-  const workProject = await createProject({
-    id: "2",
-    title: "Q1 Project Launch",
-    description: "Major product release preparation",
-    swimlaneId: workSwimlane.id,
-  });
+    const workProject = await createProject({
+      id: "2",
+      title: "Q1 Project Launch",
+      description: "Major product release preparation",
+      swimlaneId: workSwimlane.id,
+    });
 
-  const investingProject = await createProject({
-    id: "3",
-    title: "Portfolio Review",
-    description: "Monthly investment analysis and rebalancing",
-    swimlaneId: investingSwimlane.id,
-  });
+    const investingProject = await createProject({
+      id: "3",
+      title: "Portfolio Review",
+      description: "Monthly investment analysis and rebalancing",
+      swimlaneId: investingSwimlane.id,
+    });
 
-  // Create sample tasks
-  const workoutTask = await createTask({
-    id: "t1",
-    title: "Morning workout routine",
-    completed: false,
-    dueDate: "2024-12-20",
-    projectId: healthProject.id,
-    parentTaskId: null,
-    expanded: false,
-    sortOrder: 0,
-  });
+    // Create sample tasks
+    const workoutTask = await createTask({
+      id: "t1",
+      title: "Morning workout routine",
+      completed: false,
+      dueDate: "2024-12-20",
+      projectId: healthProject.id,
+      parentTaskId: null,
+      expanded: false,
+      sortOrder: 0,
+    });
 
-  // Create subtasks
-  await createTask({
-    id: "st1",
-    title: "30 min cardio",
-    completed: true,
-    projectId: healthProject.id,
-    parentTaskId: workoutTask.id,
-    sortOrder: 0,
-  });
+    // Create subtasks
+    await createTask({
+      id: "st1",
+      title: "30 min cardio",
+      completed: true,
+      projectId: healthProject.id,
+      parentTaskId: workoutTask.id,
+      sortOrder: 0,
+    });
 
-  await createTask({
-    id: "st2",
-    title: "Strength training",
-    completed: false,
-    dueDate: "2024-12-18",
-    projectId: healthProject.id,
-    parentTaskId: workoutTask.id,
-    sortOrder: 1,
-  });
+    await createTask({
+      id: "st2",
+      title: "Strength training",
+      completed: false,
+      dueDate: "2024-12-18",
+      projectId: healthProject.id,
+      parentTaskId: workoutTask.id,
+      sortOrder: 1,
+    });
+  } catch (error) {
+    console.error('Error creating sample data:', error);
+    // Don't throw error during build time - just log it
+  }
 }

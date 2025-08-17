@@ -6,8 +6,8 @@ import path from 'path';
 import fs from 'fs';
 
 // Check if we're in a build environment (Vercel, Netlify, etc.)
-const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.VERCEL_ENV;
-const isVercel = !!process.env.VERCEL;
+const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+const isBuildTime = process.env.NODE_ENV === 'production' || isVercel;
 
 let db: ReturnType<typeof drizzle>;
 
